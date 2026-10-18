@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SMM Движ — редактор mind map</title>
+<style>
+:root{font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;color:#20314b;background:#f5f8fc}*{box-sizing:border-box}
+body{margin:0;overflow:hidden}button,input{font:inherit}button{cursor:pointer}button:focus-visible,input:focus-visible{outline:3px solid #7ab4ff;outline-offset:2px}
+header{position:fixed;z-index:4;left:16px;right:16px;top:16px;display:flex;align-items:center;gap:9px;flex-wrap:wrap;background:#ffffffeb;box-shadow:0 7px 28px #263b5e1c;border:1px solid #dce5f0;border-radius:18px;padding:11px 13px}
+.brand{font-weight:800;margin-right:12px}.brand span{color:#2871cf}button{border:1px solid #d7e2ef;border-radius:10px;padding:8px 11px;background:white;color:#263c58}button:hover{background:#edf5ff}button.primary{background:#2979df;color:white;border-color:#2979df}button.danger{color:#bd3751}
+#viewport{position:fixed;inset:0;overflow:hidden;cursor:grab;background-image:radial-gradient(#d9e4f2 1px,transparent 1px);background-size:22px 22px}#viewport.dragging{cursor:grabbing}
+#stage{position:absolute;top:0;left:0;transform-origin:0 0;min-width:max-content;padding:160px 150px 100px;user-select:none}
+.tree,.tree ul{display:flex;align-items:center;list-style:none;padding:0;margin:0;gap:22px}.tree ul{flex-direction:column;align-items:stretch;gap:13px;border-left:2px solid #d3dfed;padding-left:26px;margin-left:7px}
+.tree li{display:flex;align-items:center;gap:20px;position:relative}.tree ul>li:before{content:"";width:26px;position:absolute;left:-26px;top:50%;border-top:2px solid #d3dfed}
+.node{display:flex;align-items:center;gap:8px;min-width:190px;max-width:290px;width:max-content;min-height:48px;padding:10px 12px;border:1px solid #d8e3f1;border-left:5px solid var(--accent,#4384df);border-radius:12px;background:white;box-shadow:0 4px 14px #18325212}
+.node.root{min-width:245px;background:#eaf3ff;border-color:#bfd7fb;border-left-color:#246eda}
+.node.selected{outline:3px solid #96bfff}.node .name{font-size:14px;font-weight:650;line-height:1.4;overflow-wrap:anywhere;flex:1}.node .toggle{padding:2px 5px;border-radius:6px;min-width:24px}.node .add{padding:2px 7px;border-radius:6px;color:#3073cb}
+aside{position:fixed;right:18px;top:93px;width:min(320px,calc(100vw - 36px));background:#fff;border:1px solid #d8e4f1;box-shadow:0 12px 38px #273f6026;border-radius:16px;padding:18px;z-index:6}
+aside h2{margin:0 0 15px;font-size:18px}label{font-size:12px;color:#64748b;display:block;margin-bottom:5px}input[type=text]{width:100%;border:1px solid #cbd8e9;border-radius:9px;padding:10px 11px;color:#1a2d44}.field{margin:14px 0}.actions{display:flex;gap:8px;flex-wrap:wrap}.hint{font-size:12px;color:#667894;line-height:1.5}#toast{position:fixed;bottom:22px;left:22px;background:#223957;color:#fff;padding:10px 14px;border-radius:11px;z-index:9;display:none}
+footer{position:fixed;bottom:15px;right:18px;color:#637793;font-size:12px;background:#ffffffd9;border-radius:9px;padding:7px 10px}
+@media(max-width:750px){header{left:8px;right:8px;top:8px;gap:5px;padding:8px}.brand{width:100%}header button{padding:6px 8px;font-size:12px}aside{top:140px}footer{display:none}}
+</style></head><body>
+<div id="viewport" aria-label="Рабочая область карты"><div id="stage"><ul class="tree" id="tree"></ul></div></div>
+<header><div class="brand">SMM <span>ДВИЖ</span> · Mind Map</div><button id="new">Новая карта</button><button id="expand">Раскрыть всё</button><button id="collapse">Свернуть всё</button><button id="fit">По центру</button><button id="zin">＋</button><button id="zout">－</button><button id="export" class="primary">Экспорт JSON</button><button id="import">Импорт JSON</button><input id="file" type="file" accept=".json,application/json" hidden></header>
+<aside id="panel" hidden><h2>Редактирование узла</h2><div class="field"><label for="name">Название</label><input id="name" type="text" maxlength="250"></div><div class="field"><label for="color">Цвет ветки</label><input id="color" type="color" value="#4384df"></div><div class="actions"><button id="add" class="primary">＋ Подветка</button><button id="remove" class="danger">Удалить</button><button id="close">Закрыть</button></div><p class="hint">Изменения автоматически сохраняются на этом устройстве. Двойной клик по узлу — переименовать. Кнопка ＋ добавляет дочернюю ветку.</p></aside>
+<div id="toast" role="status"></div><footer>Колёсико — масштаб · Перетаскивание фона — перемещение · Клик по ветке — редактирование</footer>
+<script>
+(()=>{'use strict';
+const KEY='smm-dvizh-mindmap-v1';
+const n=(title,children=[],color='#4384df')=>({id:crypto.randomUUID(),title,color,collapsed:false,children});
+const initial=()=>n('Маркетинг автошколы «Движ»',[
+n('Каналы привлечения',['Яндекс Карты и 2ГИС','Google Business Profile','Яндекс Директ','Таргет VK и Telegram','Reels, Shorts, TikTok','Telegram-канал и чат','Рефералы и сарафанное радио','Партнёры: автосервисы, фотоателье'].map(x=>n(x)),'#347dc9'),
+n('Контент-план',[n('Понедельник: вопрос ПДД с разбором'),n('Среда: ошибки новичков'),n('Пятница: отзыв и история сдачи'),n('Суббота: закулисье, инструктор и машина'),n('Воскресенье: акция или запись'),n('Частота: 3 видео и 3 поста в неделю'),n('Форматы: видео, карусели, сторис, кейсы')],'#16a085'),
+n('План продвижения',[n('Месяц 1: аудит, карты, отзывы, тест каналов'),n('Месяц 2: Директ, таргет, видео'),n('Месяц 3: партнёры, рефералы, акции'),n('Постоянно: отзывы и обновление карточек')],'#9464d4'),
+n('Маркетинговый план',[n('Бюджет по результативности каналов'),n('KPI: стоимость заявки и записи'),n('Конверсия: заявка → пробное'),n('Конверсия: пробное → оплата'),n('Источники заявок в CRM'),n('Еженедельный разбор цифр')],'#dd8a25'),
+n('Аналитика и отчёты',[n('Источники заявок'),n('Какой контент дал записи'),n('Стоимость ученика по каналам'),n('Что отключить и масштабировать')],'#e36982'),
+n('Воронка',[n('Холодные',[n('Реклама, видео, карты'),n('Цель: охват и подписка')]),n('Тёплые',[n('Telegram, гайд по ПДД'),n('Цель: доверие и заявка')]),n('Горячие',[n('Заявка и пробное'),n('Цель: вождение и оплата')])],'#38a0b6')
+]);
+const byId=id=>{let found=null;const walk=o=>{if(o.id===id)found=o;else o.children.forEach(walk)};walk(data);return found};
+const valid=(o,ids=new Set(),depth=0)=>{if(!o||typeof o!=='object'||Array.isArray(o)||depth>40||typeof o.title!=='string'||o.title.length>250||!Array.isArray(o.children)||o.children.length>300||typeof o.id!=='string'||ids.has(o.id))throw Error('Некорректная структура JSON');ids.add(o.id);if(ids.size>5000)throw Error('Слишком большая карта');o.color=/^#[0-9a-fA-F]{6}$/.test(o.color)?o.color:'#4384df';o.collapsed=!!o.collapsed;o.children.forEach(x=>valid(x,ids,depth+1));return o};
+let data;try{data=valid(JSON.parse(localStorage.getItem(KEY)))}catch{data=initial()}
+let selected=null,scale=1,x=0,y=0;const $=id=>document.getElementById(id),tree=$('tree'),stage=$('stage'),viewport=$('viewport');
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(data))}catch{toast('Не удалось сохранить: переполнено хранилище')}};
+let t;function toast(msg){$('toast').textContent=msg;$('toast').style.display='block';clearTimeout(t);t=setTimeout(()=>$('toast').style.display='none',2600)}
+function make(o,root=false){const li=document.createElement('li'),card=document.createElement('div');card.className='node'+(root?' root':'')+(selected===o.id?' selected':'');card.style.setProperty('--accent',o.color);card.title='Нажмите для редактирования';
+const name=document.createElement('span');name.className='name';name.textContent=o.title;card.append(name);
+const add=document.createElement('button');add.className='add';add.textContent='＋';add.title='Добавить подветку';add.onclick=e=>{e.stopPropagation();addChild(o.id)};card.append(add);
+if(o.children.length){const toggle=document.createElement('button');toggle.className='toggle';toggle.textContent=o.collapsed?'▸':'▾';toggle.title='Свернуть/развернуть';toggle.onclick=e=>{e.stopPropagation();o.collapsed=!o.collapsed;save();render()};card.insertBefore(toggle,name)}
+card.onclick=e=>{e.stopPropagation();selected=o.id;panel();render()};card.ondblclick=e=>{e.stopPropagation();selected=o.id;panel();$('name').focus();$('name').select()};li.append(card);
+if(!o.collapsed&&o.children.length){const ul=document.createElement('ul');o.children.forEach(c=>ul.append(make(c)));li.append(ul)}return li}
+function render(){tree.replaceChildren(make(data,true))}
+function panel(){const o=byId(selected);$('panel').hidden=!o;if(o){$('name').value=o.title;$('color').value=o.color;$('remove').disabled=o.id===data.id}}
+function addChild(id){let parent=byId(id);if(!parent)return;const child=n('Новая ветка',[],parent.color);parent.children.push(child);parent.collapsed=false;selected=child.id;save();render();panel();$('name').focus();$('name').select()}
+function remove(id){if(id===data.id)return;function walk(parent){const idx=parent.children.findIndex(c=>c.id===id);if(idx>=0){parent.children.splice(idx,1);return true}return parent.children.some(walk)}walk(data);selected=null;save();render();panel()}
+function traverse(o,f){f(o);o.children.forEach(c=>traverse(c,f))}
+$('name').addEventListener('input',()=>{const o=byId(selected);if(!o)return;o.title=$('name').value;save();render()});
+$('color').addEventListener('input',()=>{const o=byId(selected);if(!o)return;o.color=$('color').value;save();render()});
+$('add').onclick=()=>addChild(selected);$('remove').onclick=()=>{if(confirm('Удалить ветку вместе со всеми подветками?'))remove(selected)};
+$('close').onclick=()=>{selected=null;panel();render()};
+$('expand').onclick=()=>{traverse(data,o=>o.collapsed=false);save();render()};
+$('collapse').onclick=()=>{traverse(data,o=>o.collapsed=o.id!==data.id);save();render()};
+$('new').onclick=()=>{if(!confirm('Создать новую карту? Текущая будет заменена. Рекомендуем сначала экспортировать JSON.'))return;data=n('Новая mind map');selected=null;save();render();panel();fit()};
+$('export').onclick=()=>{const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='smm-dvizh-mindmap.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)};
+$('import').onclick=()=>$('file').click();$('file').onchange=async e=>{const file=e.target.files[0];if(!file)return;try{const next=valid(JSON.parse(await file.text()));if(!confirm('Заменить текущую карту импортированной?'))return;data=next;selected=null;save();render();panel();fit();toast('Карта импортирована')}catch(err){toast(err.message)}finally{e.target.value=''}};
+function transform(){stage.style.transform=`translate(${x}px,${y}px) scale(${scale})`}
+function zoom(f,px=innerWidth/2,py=innerHeight/2){const old=scale;scale=Math.max(.25,Math.min(2.2,scale*f));x=px-(px-x)*(scale/old);y=py-(py-y)*(scale/old);transform()}
+$('zin').onclick=()=>zoom(1.2);$('zout').onclick=()=>zoom(1/1.2);
+function fit(){scale=Math.max(.3,Math.min(1,(innerWidth-80)/stage.scrollWidth,(innerHeight-90)/stage.scrollHeight));x=(innerWidth-stage.scrollWidth*scale)/2;y=(innerHeight-stage.scrollHeight*scale)/2;transform()}
+$('fit').onclick=fit;
+viewport.addEventListener('wheel',e=>{if(e.target.closest('aside,header'))return;e.preventDefault();zoom(e.deltaY<0?1.12:1/1.12,e.clientX,e.clientY)},{passive:false});
+let drag=null;viewport.addEventListener('pointerdown',e=>{if(e.button!==0||e.target.closest('button,.node'))return;drag={px:e.clientX,py:e.clientY,ox:x,oy:y};viewport.setPointerCapture(e.pointerId);viewport.classList.add('dragging')});
+viewport.addEventListener('pointermove',e=>{if(!drag)return;x=drag.ox+e.clientX-drag.px;y=drag.oy+e.clientY-drag.py;transform()});
+function stop(){drag=null;viewport.classList.remove('dragging')}viewport.addEventListener('pointerup',stop);viewport.addEventListener('pointercancel',stop);
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){$('close').click()}if((e.key==='Delete'||e.key==='Backspace')&&selected&&document.activeElement.tagName!=='INPUT'&&selected!==data.id){if(confirm('Удалить выбранную ветку?'))remove(selected)}});
+render();requestAnimationFrame(fit);
+})();
+</script></body></html>
